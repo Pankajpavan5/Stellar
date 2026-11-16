@@ -127,6 +127,16 @@
             android:exported="false" />
 
         <service
+            android:name=".hernas.HernasRelayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <receiver
+            android:name=".hernas.HernasConfirmReceiver"
+            android:exported="false" />
+
+        <service
             android:name=".service.StellarAccessibilityService"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">

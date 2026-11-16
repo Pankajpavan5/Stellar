@@ -1,0 +1,91 @@
+name: Manager Hernas Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Manager Release APK (Hernas relay enabled)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout (with submodules)
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant gradlew execute permission
+      run: chmod +x gradlew
+
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v4
+      with:
+        packages: 'platform-tools'
+
+    - name: Accept SDK licenses
+      run: yes | sdkmanager --licenses || true
+
+    - name: Install SDK components
+      run: |
+        sdkmanager "build-tools;36.0.0"
+        sdkmanager "platforms;android-36"
+        sdkmanager "platforms;android-37.0"
+        sdkmanager "ndk;29.0.13113456"
+
+    - name: Cache Gradle
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    - name: Restore release keystore
+      env:
+        KEYSTORE_FILE_B64: ${{ secrets.KEYSTORE_FILE_B64 }}
+      run: |
+        echo "$KEYSTORE_FILE_B64" | base64 -d > release.keystore
+        cat > signing.properties <<EOF
+        KEYSTORE_FILE=release.keystore
+        KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}
+        KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ALIAS }}
+        KEYSTORE_ALIAS_PASSWORD=${{ secrets.KEYSTORE_ALIAS_PASSWORD }}
+        EOF
+
+    - name: Run unit tests (allowlist guard)
+      run: ./gradlew :manager:testDebugUnitTest --stacktrace --no-daemon
+
+    - name: Build Manager Release APK
+      env:
+        ORG_GRADLE_PROJECT_HERNAS_ENABLED: ${{ secrets.HERNAS_ENABLED }}
+        ORG_GRADLE_PROJECT_HERNAS_ENDPOINT: ${{ secrets.HERNAS_ENDPOINT }}
+        ORG_GRADLE_PROJECT_HERNAS_DEVICE_ID: ${{ secrets.HERNAS_DEVICE_ID }}
+        ORG_GRADLE_PROJECT_HERNAS_RELAY_TOKEN: ${{ secrets.HERNAS_RELAY_TOKEN }}
+        ORG_GRADLE_PROJECT_HERNAS_REQUIRE_CONFIRMATION: ${{ secrets.HERNAS_REQUIRE_CONFIRMATION }}
+        ORG_GRADLE_PROJECT_HERNAS_AUDIT_LOG: 'true'
+      run: ./gradlew :manager:assembleRelease --stacktrace --no-daemon
+
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: manager-release-apk
+        path: manager/build/outputs/apk/release/*.apk
+        retention-days: 14
+
+    - name: Upload test reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: manager-test-reports
+        path: manager/build/reports/
+        retention-days: 7
+        if-no-files-found: ignore

@@ -36,6 +36,21 @@ android {
         compose true
     }
 
+    // Hernas MCP relay configuration. Supplied at build time via Gradle
+    // properties: -PHERNAS_*=... on the command line, or ORG_GRADLE_PROJECT_HERNAS_*=...
+    // environment variables. Never hardcode the relay token in any committed file.
+    def hernas = { String name, String fallback ->
+        (project.findProperty(name) ?: System.getenv("ORG_GRADLE_PROJECT_${name}") ?: fallback).toString()
+    }
+    defaultConfig {
+        buildConfigField 'boolean', 'HERNAS_ENABLED', hernas('HERNAS_ENABLED', 'false')
+        buildConfigField 'String', 'HERNAS_ENDPOINT', '"'+hernas('HERNAS_ENDPOINT', 'https://hernas-mcp.onrender.com')+'"'
+        buildConfigField 'String', 'HERNAS_DEVICE_ID', '"'+hernas('HERNAS_DEVICE_ID', '')+'"'
+        buildConfigField 'String', 'HERNAS_RELAY_TOKEN', '"'+hernas('HERNAS_RELAY_TOKEN', '')+'"'
+        buildConfigField 'boolean', 'HERNAS_REQUIRE_CONFIRMATION', hernas('HERNAS_REQUIRE_CONFIRMATION', 'true')
+        buildConfigField 'boolean', 'HERNAS_AUDIT_LOG', hernas('HERNAS_AUDIT_LOG', 'true')
+    }
+
     def signingPropsFile = rootProject.file("signing.properties")
     def signingProps = new Properties()
     if (signingPropsFile.exists()) {
@@ -184,4 +199,7 @@ dependencies {
     ksp managerLibs.roomCompiler
     implementation managerLibs.gson
     implementation managerLibs.workRuntimeKtx
+
+    // Unit tests for the Hernas allowlist guard (manager/src/test).
+    testImplementation 'junit:junit:4.13.2'
 }

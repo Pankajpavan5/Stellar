@@ -49,7 +49,9 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Api
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
@@ -57,6 +59,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -83,6 +86,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.net.toUri
@@ -119,6 +124,9 @@ import roro.stellar.manager.ui.navigation.components.StandardLargeTopAppBar
 import roro.stellar.manager.ui.navigation.components.createTopAppBarScrollBehavior
 import roro.stellar.manager.ui.theme.AppShape
 import roro.stellar.manager.ui.theme.AppSpacing
+import roro.stellar.manager.hernas.HernasConfig
+import roro.stellar.manager.hernas.HernasRelayService
+import roro.stellar.manager.hernas.HernasSettings
 import roro.stellar.manager.ui.theme.StartPage
 import roro.stellar.manager.ui.theme.ThemeMode
 import roro.stellar.manager.ui.theme.ThemePreferences
@@ -226,6 +234,13 @@ fun SettingsScreen(
     var hideBackground by remember {
         mutableStateOf(preferences.getBoolean(StellarSettings.HIDE_BACKGROUND, false))
     }
+
+    var mcpEnabled by remember { mutableStateOf(HernasSettings.enabled) }
+    var mcpConfigExpanded by remember { mutableStateOf(HernasConfig.enabled) }
+    var mcpEndpoint by remember { mutableStateOf(HernasSettings.endpoint) }
+    var mcpDeviceId by remember { mutableStateOf(HernasSettings.deviceId) }
+    var mcpRelayToken by remember { mutableStateOf(HernasSettings.relayToken) }
+    var mcpShowToken by remember { mutableStateOf(false) }
 
     var currentThemeMode by remember { mutableStateOf(ThemePreferences.themeMode.value) }
     var currentStartPage by remember { mutableStateOf(ThemePreferences.startPage.value) }
@@ -570,6 +585,128 @@ fun SettingsScreen(
                         BackgroundVisibilityUtils.setHidden(context, newValue)
                     }
                 )
+            }
+
+            item {
+                SettingsSwitchCard(
+                    icon = Icons.Default.Api,
+                    title = "MCP relay (Hernas)",
+                    subtitle = if (HernasConfig.isConfigComplete()) {
+                        "On/off and config · device: ${HernasSettings.deviceId}"
+                    } else {
+                        "Not configured — set device ID and token below"
+                    },
+                    checked = mcpEnabled,
+                    onCheckedChange = { newValue ->
+                        if (newValue && !HernasConfig.isConfigComplete()) {
+                            Toast.makeText(
+                                context,
+                                "Set device ID and relay token before enabling MCP",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            mcpConfigExpanded = true
+                            return@SettingsSwitchCard
+                        }
+                        mcpEnabled = newValue
+                        HernasSettings.enabled = newValue
+                        if (newValue) {
+                            HernasRelayService.start(context)
+                        } else {
+                            HernasRelayService.stop(context)
+                        }
+                    }
+                )
+                AnimatedVisibility(visible = mcpEnabled || mcpConfigExpanded) {
+                    Column {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            ),
+                            shape = AppShape.shapes.cardMedium
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(AppSpacing.cardPadding),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = mcpEndpoint,
+                                    onValueChange = { mcpEndpoint = it },
+                                    label = { Text("Endpoint") },
+                                    placeholder = { Text("https://hernas-mcp.onrender.com") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = AppShape.shapes.inputField
+                                )
+                                OutlinedTextField(
+                                    value = mcpDeviceId,
+                                    onValueChange = { mcpDeviceId = it },
+                                    label = { Text("Device ID") },
+                                    placeholder = { Text("stellar-phone") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = AppShape.shapes.inputField
+                                )
+                                OutlinedTextField(
+                                    value = mcpRelayToken,
+                                    onValueChange = { mcpRelayToken = it },
+                                    label = { Text("Relay token") },
+                                    singleLine = true,
+                                    visualTransformation = if (mcpShowToken) VisualTransformation.None
+                                    else PasswordVisualTransformation(),
+                                    trailingIcon = {
+                                        IconButton(onClick = { mcpShowToken = !mcpShowToken }) {
+                                            Icon(
+                                                imageVector = if (mcpShowToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = AppShape.shapes.inputField
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    TextButton(onClick = { mcpConfigExpanded = false }) {
+                                        Text("Cancel")
+                                    }
+                                    Button(
+                                        onClick = {
+                                            val trimmedEndpoint = mcpEndpoint.trim().trimEnd('/')
+                                            val endpointOk = trimmedEndpoint.startsWith("https://") ||
+                                                trimmedEndpoint.startsWith("http://127.0.0.1:") ||
+                                                trimmedEndpoint.startsWith("http://localhost:")
+                                            if (!endpointOk) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Endpoint must be https:// (or http://127.0.0.1 for the local server)",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                                return@Button
+                                            }
+                                            HernasSettings.endpoint = mcpEndpoint
+                                            HernasSettings.deviceId = mcpDeviceId
+                                            HernasSettings.relayToken = mcpRelayToken
+                                            if (mcpEnabled) {
+                                                // Restart so the running service picks up the new config.
+                                                HernasRelayService.stop(context)
+                                                HernasRelayService.start(context)
+                                            }
+                                            Toast.makeText(context, "MCP config saved", Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Text("Save")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             item(span = { GridItemSpan(gridColumns) }) {

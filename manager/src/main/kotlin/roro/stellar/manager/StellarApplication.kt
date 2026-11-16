@@ -16,7 +16,7 @@ import roro.stellar.manager.compat.BuildUtils.atLeast30
 import roro.stellar.manager.db.AppDatabase
 import roro.stellar.manager.startup.notification.BootStartNotifications
 import roro.stellar.manager.util.Logger.Companion.LOGGER
-import roro.stellar.manager.BuildConfig
+import roro.stellar.manager.hernas.HernasConfig
 import roro.stellar.manager.hernas.HernasRelayService
 
 lateinit var application: StellarApplication
@@ -50,7 +50,7 @@ class StellarApplication : Application() {
         application = this
         init(this)
         BootStartNotifications.createChannel(this)
-        if (BuildConfig.HERNAS_ENABLED) {
+        if (HernasConfig.enabled) {
             HernasRelayService.start(this)
         }
         Stellar.addServiceStartedListener(

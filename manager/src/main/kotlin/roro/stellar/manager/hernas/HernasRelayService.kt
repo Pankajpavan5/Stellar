@@ -276,5 +276,9 @@ class HernasRelayService : Service() {
                 context, Intent(context, HernasRelayService::class.java)
             )
         }
+
+        fun stop(context: Context) {
+            context.stopService(Intent(context, HernasRelayService::class.java))
+        }
     }
 }

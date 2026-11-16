@@ -120,7 +120,7 @@ def collapseReleaseResourceNames = task('collapseReleaseResourceNames').doLast {
     def optimized = new File("${zip}.opt")
     // Gradle 9 removed Project.exec/Project.delete; use plain java instead.
     def pb = new ProcessBuilder([aapt2.toString(), 'optimize', '--collapse-resource-names',
-            '--resources-config-path', 'aapt2-resources.cfg',
+            '--resources-config-path', Paths.get(project.projectDir.path, 'aapt2-resources.cfg').toString(),
             '-o', optimized.toString(), zip.toString()]).redirectErrorStream(true)
     def proc = pb.start()
     def output = new StringBuilder()

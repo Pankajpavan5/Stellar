@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -145,6 +146,19 @@ class HernasRelayService : Service() {
     }
 
     private suspend fun handleJob(job: HernasJob) {
+        // Doze freezes apps between maintenance windows mid-job; hold a bounded
+        // wake lock so poll→execute→result-post can't be suspended apart.
+        val pm = getSystemService(PowerManager::class.java)
+        val wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "stellar:hernas_job")
+        wakeLock.acquire(HernasExecutor.MAX_TIMEOUT_MS + 15_000L)
+        try {
+            handleJobLocked(job)
+        } finally {
+            wakeLock.release()
+        }
+    }
+
+    private suspend fun handleJobLocked(job: HernasJob) {
         val id = job.jobId!!
         val raw = job.command!!
         val decision = HernasCommandGuard.decide(raw)
